@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Bergwetter-Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --bg:#0f1418; --panel:#182027; --panel2:#1f2a33; --line:#2b3843;
@@ -80,6 +82,18 @@
   .reasons{font-size:14px;color:var(--muted);margin:8px 0}
   .arrow{display:inline-block}
   iframe.holfuy{width:100%;height:330px;border:0;border-radius:10px;background:#fff;margin-top:8px}
+  /* Karte */
+  #map{height:420px;border-radius:14px;overflow:hidden;background:#11181d}
+  .daysel{display:flex;flex-wrap:wrap;margin-bottom:10px}
+  .daysel button{border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:15px;padding:8px 12px;border-radius:9px;margin:0 6px 6px 0}
+  .daysel button.on{background:var(--panel2);color:var(--text);font-weight:700;border-color:var(--accent)}
+  .best{background:var(--panel);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .best .big{font-size:22px;font-weight:700;margin:2px 0}
+  .best .more{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.6}
+  .leaflet-tooltip.mlabel{background:rgba(15,20,24,.85);color:#e8eef2;border:0;box-shadow:none;font-size:12px;padding:2px 6px}
+  .leaflet-tooltip.mlabel:before{display:none}
+  .leaflet-popup-content{font-size:14px;color:#111;line-height:1.4}
+  .leaflet-popup-content button{margin-top:6px;border:0;background:#1f6fa8;color:#fff;border-radius:7px;padding:6px 10px;font-size:14px}
   footer{color:var(--muted);font-size:12px;padding:0 18px 24px;line-height:1.5}
 </style>
 </head>
@@ -94,6 +108,7 @@
 <div id="detail"><div class="dbox" id="dbox"></div></div>
 <footer>
   Prognose: Open-Meteo (Modell ICON, Deutscher Wetterdienst – nahe Tage ICON-D2, danach ICON-EU). Live-Wind: Holfuy-Stationen. Startplatz-Wind ist aus Modell-Höhenwinden auf Startplatzhöhe interpoliert – lokale Effekte (Lee, Talwind, Düsen) bildet kein Modell ab.
+  Karte: Leaflet, © OpenStreetMap-Mitwirkende, © CARTO. Fahrzeiten: OSRM (ohne Verkehr, ab Augsburg-Wertach).
   Das Dashboard ist eine Vorauswahl. Die Flugentscheidung triffst du mit DHV-Wetter, Live-Werten und dem Blick vor Ort.
 </footer>
 
@@ -136,6 +151,10 @@ var SITES = [
   {name:"Brauneck", area:"Lenggries", lat:47.660, lon:11.525, alt:1500, dirs:["S","SO","W"], holfuy:[], reserve:true}
 ];
 SITES.forEach(function(s){ if(s.checked===undefined) s.checked=false; });
+
+/* Startpunkt für Entfernungen. Bewusst auf ~1 km gerundet (Augsburg, an der Wertach),
+   damit deine genaue Adresse nicht öffentlich im Quelltext steht. */
+var HOME = {name:"Zuhause (Augsburg)", lat:48.38, lon:10.89};
 
 /* Föhn-Indikator: Luftdruck Bozen minus München */
 var FOEHN = [{name:"Bozen", lat:46.498, lon:11.355},{name:"München", lat:48.137, lon:11.575}];
@@ -325,7 +344,7 @@ function analysePara(data){
 /* =====================================================================
    Darstellung
    ===================================================================== */
-var STATE={mode:load("bw_mode")||"para", para:null, ski:null, demo:false};
+var STATE={mode:load("bw_mode")||"para", para:null, ski:null, demo:false, mapDay:null, skiDay:null};
 
 function weekendKeys(days){
   var w=days.filter(isWeekend);
@@ -349,7 +368,12 @@ function renderPara(){
       :"<div class='none'>Nach Modell kein Gebiet mit fliegbarem Fenster.</div>";
     html+="</div>";
   });
-  html+="</div><h2>7-Tage-Übersicht</h2><div class='tablewrap'><table><thead><tr><th></th>";
+  html+="</div>";
+  if(STATE.mapDay===null||STATE.mapDay>=A.days.length){var wk=weekendKeys(A.days);STATE.mapDay=wk.length?A.days.indexOf(wk[0]):0;}
+  html+="<h2>Karte – nächstbestes Fluggebiet</h2><div class='daysel'>"+A.days.map(function(k,i){
+    return "<button data-pday='"+i+"' class='"+(i===STATE.mapDay?"on":"")+"'>"+dayLabel(k)+"</button>";}).join("")+"</div>";
+  html+="<div class='best'>"+bestParaHTML(STATE.mapDay)+"</div><div id='map'></div>";
+  html+="<h2>7-Tage-Übersicht</h2><div class='tablewrap'><table><thead><tr><th></th>";
   A.days.forEach(function(k){html+="<th class='"+(isWeekend(k)?"we":"")+"'>"+dayLabel(k)+"</th>";});
   html+="</tr></thead><tbody><tr class='foehn'><td class='site'><div class='sname'>Föhn-Index</div><div class='smeta'>Δp Bozen – München</div></td>";
   A.foehn.forEach(function(v){var c=v===null?"grey":(v>=CONFIG.limits.foehnRed?"red":(v>=CONFIG.limits.foehnYellow?"yellow":"green"));
@@ -367,6 +391,113 @@ function renderPara(){
   html+="</tbody></table></div><div class='legend'>Zahl = grüne Stunden zwischen "+CONFIG.flightWindow[0]+" und "+CONFIG.flightWindow[1]+" Uhr · S = max. Wind auf Startplatzhöhe · H = max. Höhenwind ~3000 m (km/h) · 📡 = Live-Station vorhanden · ⚠ = Startrichtung noch nicht geprüft · Antippen für Stundenwerte.</div>";
   html+="<h2>Links</h2><div class='links'>"+LINKS_PARA.map(function(l){return "<a href='"+l[1]+"' target='_blank' rel='noopener'>"+esc(l[0])+"</a>";}).join("")+"</div>";
   $("main").innerHTML=html;
+  drawParaMap();
+}
+
+/* =====================================================================
+   Entfernungen & Karte
+   ===================================================================== */
+var COLORS={green:"#2fbf71",yellow:"#f2c94c",red:"#eb5757",grey:"#45525c",good:"#5cc8ff",ok:"#2f6f99",poor:"#45525c"};
+function haversine(a,b){var R=6371,r=Math.PI/180,dLa=(b.lat-a.lat)*r,dLo=(b.lon-a.lon)*r;
+  var x=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLo/2)*Math.sin(dLo/2);
+  return 2*R*Math.asin(Math.sqrt(x));}
+function fmtDrive(o){
+  if(!o) return "";
+  if(o.exact){var h=Math.floor(o.min/60),m=Math.round(o.min%60);return "🚗 "+(h?h+" h ":"")+m+" min · "+Math.round(o.km)+" km";}
+  return "🚗 ca. "+Math.round(o.km)+" km";
+}
+function driveMin(p){return p.drive?p.drive.min:9999;}
+/* Fahrzeiten einmalig über den freien OSRM-Routendienst holen und im Browser merken.
+   Klappt das nicht, wird aus der Luftlinie geschätzt (Anzeige mit "ca."). */
+function loadRoutes(){
+  var pts=SITES.concat(REGIONS);
+  pts.forEach(function(p){var km=haversine(HOME,p)*1.35;p.drive={km:km,min:km/75*60,exact:false};});
+  var key="bw_routes_"+[HOME].concat(pts).map(function(p){return p.lat+","+p.lon;}).join(";");
+  var cached=load(key);
+  if(cached){try{var c=JSON.parse(cached);pts.forEach(function(p,i){if(c[i])p.drive=c[i];});return Promise.resolve();}catch(e){}}
+  var url="https://router.project-osrm.org/table/v1/driving/"+[HOME].concat(pts).map(function(p){return p.lon+","+p.lat;}).join(";")+
+    "?sources=0&annotations=duration,distance";
+  return getJSON(url).then(function(j){
+    if(!j.durations||!j.distances) return;
+    var out=pts.map(function(p,i){var d=j.durations[0][i+1],m=j.distances[0][i+1];
+      if(d===null||m===null) return null; p.drive={km:m/1000,min:d/60,exact:true};return p.drive;});
+    store(key,JSON.stringify(out));
+  }).catch(function(){});
+}
+
+var MAP=null;
+function makeMap(points){
+  if(MAP){MAP.remove();MAP=null;}
+  if(!window.L||!$("map")){ if($("map")) $("map").innerHTML="<p class='none' style='padding:14px'>Karte konnte nicht geladen werden.</p>"; return; }
+  MAP=L.map("map",{scrollWheelZoom:false});
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    {maxZoom:14,subdomains:"abcd",attribution:"© OpenStreetMap-Mitwirkende © CARTO"}).addTo(MAP);
+  L.circleMarker([HOME.lat,HOME.lon],{radius:7,color:"#fff",weight:2,fillColor:"#5cc8ff",fillOpacity:1}).addTo(MAP)
+    .bindTooltip("Augsburg",{permanent:true,direction:"right",className:"mlabel"});
+  var b=[[HOME.lat,HOME.lon]];
+  points.forEach(function(p){
+    L.circleMarker([p.lat,p.lon],{radius:p.big?13:10,color:p.big?"#fff":"#0d1215",weight:p.big?3:2,fillColor:p.color,fillOpacity:.95})
+      .addTo(MAP).bindPopup(p.popup).bindTooltip(p.label,{permanent:true,direction:"right",className:"mlabel"});
+    b.push([p.lat,p.lon]);
+  });
+  MAP.fitBounds(b,{padding:[30,30]});
+}
+
+function rankPara(di){
+  var order={green:0,yellow:1,red:2,grey:3};
+  return STATE.para.sites.map(function(r){return {r:r,d:r.days[di]};}).sort(function(a,b){
+    return (order[a.d.color]-order[b.d.color])||(driveMin(a.r.site)-driveMin(b.r.site));});
+}
+function bestParaHTML(di){
+  var list=rankPara(di), best=list[0], k=STATE.para.days[di];
+  if(!best||best.d.color==="red"||best.d.color==="grey") return "<div class='smeta'>"+dayLabel(k)+"</div><div class='big'>Kein fliegbares Gebiet laut Modell</div>";
+  var lbl=best.d.color==="green"?"Nächstes grünes Gebiet":"Kein grünes Gebiet – nächstes gelbes";
+  var more=list.slice(1).filter(function(x){return x.d.color===best.d.color;}).slice(0,3).map(function(x){
+    return esc(x.r.site.name)+" ("+x.d.green+" h, "+fmtDrive(x.r.site.drive).replace("🚗 ","")+")";}).join(" · ");
+  return "<div class='smeta'>"+dayLabel(k)+" · "+lbl+"</div><div class='big'><span style='color:"+COLORS[best.d.color]+"'>●</span> "+
+    esc(best.r.site.name)+" – "+best.d.green+" grüne Stunden</div><div>"+fmtDrive(best.r.site.drive)+"</div>"+
+    (more?"<div class='more'>Weitere: "+more+"</div>":"");
+}
+function drawParaMap(){
+  var di=STATE.mapDay, top=rankPara(di)[0];
+  makeMap(STATE.para.sites.map(function(r){
+    var d=r.days[di], si=SITES.indexOf(r.site);
+    return {lat:r.site.lat,lon:r.site.lon,color:COLORS[d.color],big:top&&top.r===r&&(d.color==="green"||d.color==="yellow"),
+      label:r.site.name+(d.color==="grey"?"":" "+d.green+"h"),
+      popup:"<b>"+esc(r.site.name)+"</b><br>"+esc(r.site.area)+" · "+r.site.alt+" m<br>"+d.green+" grüne Stunden · Start max "+d.maxS+" km/h<br>"+
+        fmtDrive(r.site.drive)+"<br><button onclick='openDetail("+si+","+di+")'>Stundenwerte</button>"};
+  }));
+}
+
+/* Skitouren: einfache Tourenwetter-Einstufung (OHNE Lawinenlage!) */
+function skiDayInfo(R,i){
+  var D=R.daily, snow72=0;for(var j=Math.max(0,i-3);j<i;j++) snow72+=D.snowfall_sum[j]||0;
+  var sun=(D.sunshine_duration[i]||0)/3600, wind=D.wind_speed_10m_max[i]||0, today=D.snowfall_sum[i]||0;
+  var cls=(snow72>=10&&sun>=4&&wind<40&&today<3)?"good":(((snow72>=5||sun>=4)&&wind<50)?"ok":"poor");
+  return {snow72:Math.round(snow72),sun:sun,wind:Math.round(wind),today:Math.round(today),cls:cls};
+}
+function rankSki(i){
+  var order={good:0,ok:1,poor:2};
+  return STATE.ski.map(function(R,ri){return {reg:REGIONS[ri],info:skiDayInfo(R,i)};}).sort(function(a,b){
+    return (order[a.info.cls]-order[b.info.cls])||(b.info.snow72-a.info.snow72)||(driveMin(a.reg)-driveMin(b.reg));});
+}
+function skiTxt(x){return x.info.snow72+" cm Neuschnee (72 h), ☀ "+x.info.sun.toFixed(0)+" h, Wind "+x.info.wind+" km/h"+(x.info.today?", "+x.info.today+" cm Schneefall am Tag":"");}
+function bestSkiHTML(i){
+  var list=rankSki(i), b=list[0], k=STATE.ski[0].daily.time[i];
+  var lbl={good:"Pulver + Sonne",ok:"brauchbares Tourenwetter",poor:"eher kein Tourenwetter"}[b.info.cls];
+  // bei gleich guter Einstufung: das nächstgelegene zuerst
+  var same=list.filter(function(x){return x.info.cls===b.info.cls&&x.info.snow72>=b.info.snow72-5;}).sort(function(a,c){return driveMin(a.reg)-driveMin(c.reg);});
+  b=same[0]||b;
+  var more=list.filter(function(x){return x!==b;}).slice(0,3).map(function(x){return esc(x.reg.name)+" ("+x.info.snow72+" cm, "+fmtDrive(x.reg.drive).replace("🚗 ","")+")";}).join(" · ");
+  return "<div class='smeta'>"+dayLabel(k)+" · "+lbl+"</div><div class='big'><span style='color:"+COLORS[b.info.cls]+"'>●</span> "+esc(b.reg.name)+"</div><div>"+
+    skiTxt(b)+"</div><div>"+fmtDrive(b.reg.drive)+"</div><div class='more'>Weitere: "+more+"</div>";
+}
+function drawSkiMap(i){
+  makeMap(STATE.ski.map(function(R,ri){
+    var info=skiDayInfo(R,i), reg=REGIONS[ri];
+    return {lat:reg.lat,lon:reg.lon,color:COLORS[info.cls],label:reg.name+" "+info.snow72+" cm",
+      popup:"<b>"+esc(reg.name)+"</b><br>"+esc(reg.area)+"<br>"+skiTxt({info:info})+"<br>"+fmtDrive(reg.drive)+"<br><i>Lawinenlage separat prüfen!</i>"};
+  }));
 }
 
 function arrow(dir){return "<span class='arrow' style='transform:rotate("+Math.round(dir+180)+"deg)'>↑</span>";}
@@ -407,6 +538,12 @@ function renderSki(){
     return {reg:REGIONS[ri],D:D,ti:ti,past:Math.round(past),next3:Math.round(next3),fl:fl};
   });
   var html="<div class='note'>Die Lawinengefahr steht hier bewusst nicht als Ampel. Vor jeder Tour den Lawinenlagebericht lesen (Links unten).</div>";
+  var DT=S[0].daily.time, t0=rows[0].ti, sdays=[];for(var q=t0;q<DT.length&&sdays.length<8;q++) sdays.push(q);
+  if(STATE.skiDay===null||sdays.indexOf(STATE.skiDay)<0){var wk0=weekendKeys(DT.slice(t0));STATE.skiDay=wk0.length?DT.indexOf(wk0[0]):t0;}
+  html+="<h2>Karte – nächstbestes Tourengebiet</h2><div class='daysel'>"+sdays.map(function(i){
+    return "<button data-sday='"+i+"' class='"+(i===STATE.skiDay?"on":"")+"'>"+dayLabel(DT[i])+"</button>";}).join("")+"</div>";
+  html+="<div class='best'>"+bestSkiHTML(STATE.skiDay)+"</div><div id='map'></div>"+
+    "<div class='legend'>Hellblau = mind. 10 cm Neuschnee in den 72 h davor, Sonne und wenig Wind · Dunkelblau = brauchbar · Grau = eher nicht. Reine Wettereinschätzung, keine Aussage zur Lawinengefahr.</div>";
   html+="<h2>Wo schneit's als Nächstes? (3 Tage)</h2><div class='rank'>";
   rows.slice().sort(function(a,b){return b.next3-a.next3;}).forEach(function(x){
     html+="<div><span>"+esc(x.reg.name)+" <span class='smeta'>"+esc(x.reg.area)+"</span></span><b>"+x.next3+" cm</b></div>";});
@@ -426,6 +563,7 @@ function renderSki(){
   });
   html+="</div><h2>Lawinenlage & Touren</h2><div class='links'>"+LINKS_SKI.map(function(l){return "<a href='"+l[1]+"' target='_blank' rel='noopener'>"+esc(l[0])+"</a>";}).join("")+"</div>";
   $("main").innerHTML=html;
+  drawSkiMap(STATE.skiDay);
 }
 
 function render(){
@@ -440,9 +578,11 @@ function render(){
 function refresh(){
   $("updated").textContent="Lade Daten …";
   Promise.all([
+    loadRoutes(),
     getJSON(paraURL()).then(asArray).catch(function(e){return null;}),
     getJSON(skiURL()).then(asArray).catch(function(e){return null;})
   ]).then(function(res){
+    res=res.slice(1);
     STATE.demo=!res[0]||!res[1];
     STATE.para=analysePara(res[0]||demoPara());
     STATE.ski=res[1]||demoSki();
@@ -461,6 +601,9 @@ $("mPara").onclick=function(){STATE.mode="para";store("bw_mode","para");render()
 $("mSki").onclick=function(){STATE.mode="ski";store("bw_mode","ski");render();};
 $("reload").onclick=refresh;
 $("main").addEventListener("click",function(e){
+  var t=e.target;
+  if(t.getAttribute&&t.getAttribute("data-pday")!==null){STATE.mapDay=+t.getAttribute("data-pday");renderPara();return;}
+  if(t.getAttribute&&t.getAttribute("data-sday")!==null){STATE.skiDay=+t.getAttribute("data-sday");renderSki();return;}
   var el=e.target; while(el&&el!==this&&!(el.getAttribute&&el.getAttribute("data-s")!==null)) el=el.parentNode;
   if(el&&el!==this) openDetail(+el.getAttribute("data-s"),+el.getAttribute("data-d"));
 });
