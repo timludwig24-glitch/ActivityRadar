@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Bergwetter-Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1418; --panel:#182027; --panel2:#1f2a33; --line:#2b3843;
+    --text:#e8eef2; --muted:#8fa1ae; --accent:#5cc8ff;
+    --green:#2fbf71; --yellow:#f2c94c; --red:#eb5757; --grey:#45525c; --snow:#9ad7ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;-webkit-text-size-adjust:100%}
+  body.night{filter:brightness(.55)}
+  a{color:var(--accent);text-decoration:none}
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .clock{font-size:44px;font-weight:200;letter-spacing:1px;line-height:1}
+  .date{color:var(--muted);font-size:15px;margin-top:4px}
+  .modes{display:flex;background:var(--panel);border-radius:12px;padding:4px}
+  .modes button{border:0;background:transparent;color:var(--muted);font-size:17px;padding:10px 18px;border-radius:9px;cursor:pointer}
+  .modes button.on{background:var(--panel2);color:var(--text);font-weight:600}
+  .status{color:var(--muted);font-size:13px;text-align:right}
+  .status button{margin-top:6px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13px}
+  .demo{background:#5a3b00;color:#ffd98a;padding:8px 18px;font-size:14px;display:none}
+  main{padding:14px 18px 30px}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:18px 0 10px;font-weight:600}
+  .weekend{display:flex;margin:0 -6px}
+  .wday{flex:1;background:var(--panel);border-radius:14px;padding:12px 14px;margin:0 6px}
+  .wday h3{margin:0 0 8px;font-size:18px}
+  .chip{display:inline-block;padding:6px 10px;border-radius:9px;margin:0 6px 6px 0;font-size:15px;color:#0d1215;font-weight:600;cursor:pointer}
+  .none{color:var(--muted);font-size:14px}
+  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;background:var(--panel)}
+  table{border-collapse:collapse;width:100%}
+  th,td{padding:0;text-align:center;border-bottom:1px solid var(--line)}
+  thead th{font-size:13px;color:var(--muted);padding:8px 4px;font-weight:600}
+  thead th.we{color:var(--text)}
+  td.site{text-align:left;padding:8px 10px;white-space:nowrap;min-width:170px}
+  .sname{font-size:16px;font-weight:600}
+  .smeta{font-size:12px;color:var(--muted)}
+  .warn{color:var(--yellow)}
+  td.cell{padding:4px}
+  .c{border-radius:9px;padding:7px 2px;cursor:pointer;color:#0d1215;min-width:62px}
+  .c .h{font-size:17px;font-weight:700}
+  .c .s{font-size:11px;opacity:.85}
+  .c.we{box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)}
+  .bg-green{background:var(--green)} .bg-yellow{background:var(--yellow)} .bg-red{background:var(--red)} .bg-grey{background:var(--grey);color:var(--text)}
+  tr.foehn td.site{color:var(--muted)}
+  .legend{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .reserve td{opacity:.75}
+  /* Ski */
+  .grid{display:flex;flex-wrap:wrap;margin:0 -6px}
+  .card{background:var(--panel);border-radius:14px;padding:12px 14px;margin:0 6px 12px;flex:1 1 300px}
+  .card h3{margin:0;font-size:17px}
+  .card .smeta{margin-bottom:8px}
+  .bars{display:flex;align-items:flex-end;height:90px;margin:6px 0 2px}
+  .bar{flex:1;margin:0 2px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+  .bar i{display:block;width:100%;background:var(--snow);border-radius:4px 4px 0 0;min-height:2px}
+  .bar b{font-size:11px;color:var(--text);font-weight:600;margin-bottom:2px}
+  .barlbl{display:flex}
+  .barlbl span{flex:1;font-size:11px;color:var(--muted);text-align:center}
+  .barlbl span.we{color:var(--text);font-weight:700}
+  .kv{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:6px}
+  .kv b{color:var(--text)}
+  .rank{background:var(--panel);border-radius:14px;padding:12px 14px}
+  .rank div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:16px}
+  .rank div:last-child{border-bottom:0}
+  .links a{display:inline-block;background:var(--panel2);border-radius:9px;padding:8px 12px;margin:0 8px 8px 0;font-size:15px}
+  .note{background:var(--panel2);border-left:4px solid var(--yellow);padding:10px 12px;border-radius:8px;font-size:14px;color:var(--text);margin:10px 0}
+  /* Detail */
+  #detail{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.65);display:none;z-index:10;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .dbox{background:var(--bg);margin:30px auto;max-width:980px;border-radius:16px;border:1px solid var(--line);padding:16px 18px}
+  .dhead{display:flex;justify-content:space-between;align-items:flex-start}
+  .dhead button{border:0;background:var(--panel2);color:var(--text);font-size:22px;width:44px;height:44px;border-radius:22px}
+  .htable td,.htable th{padding:6px 4px;font-size:14px}
+  .htable td.r{border-radius:6px}
+  .reasons{font-size:14px;color:var(--muted);margin:8px 0}
+  .arrow{display:inline-block}
+  iframe.holfuy{width:100%;height:330px;border:0;border-radius:10px;background:#fff;margin-top:8px}
+  footer{color:var(--muted);font-size:12px;padding:0 18px 24px;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="clock" id="clock">--:--</div><div class="date" id="date"></div></div>
+  <div class="modes"><button id="mPara" class="on">🪂 Gleitschirm</button><button id="mSki">⛷ Skitour</button></div>
+  <div class="status"><div id="updated">Lade Daten …</div><button id="reload">Aktualisieren</button></div>
+</header>
+<div class="demo" id="demo">DEMO-DATEN – das sind erfundene Werte, keine Prognose. Die Seite konnte die Wetterdaten hier nicht laden (z. B. in einer Vorschau ohne Internetzugriff).</div>
+<main id="main"></main>
+<div id="detail"><div class="dbox" id="dbox"></div></div>
+<footer>
+  Prognose: Open-Meteo (Modell ICON, Deutscher Wetterdienst – nahe Tage ICON-D2, danach ICON-EU). Live-Wind: Holfuy-Stationen. Startplatz-Wind ist aus Modell-Höhenwinden auf Startplatzhöhe interpoliert – lokale Effekte (Lee, Talwind, Düsen) bildet kein Modell ab.
+  Das Dashboard ist eine Vorauswahl. Die Flugentscheidung triffst du mit DHV-Wetter, Live-Werten und dem Blick vor Ort.
+</footer>
+
+<script>
+/* =====================================================================
+   KONFIGURATION – hier kannst du alles anpassen
+   ===================================================================== */
+var CONFIG = {
+  flightWindow: [10, 17],      // Uhrzeit von–bis, die für die Ampel zählt
+  greenHoursForGreenDay: 3,    // ab so vielen grünen Stunden ist der Tag grün
+  refreshMinutes: 30,
+  nightDim: [22, 6],           // Bildschirm abdunkeln von–bis
+  limits: {                    // Grenzwerte in km/h, hPa, J/kg, mm, m
+    startWindYellow: 15, startWindRed: 25,   // Wind auf Startplatzhöhe
+    gustYellow: 25,      gustRed: 35,        // Böen (Modell, bodennah)
+    upperYellow: 25,     upperRed: 40,       // Höhenwind ~3000 m (700 hPa)
+    foehnYellow: 3,      foehnRed: 6,        // Druckdifferenz Bozen – München
+    capeYellow: 800,     capeRed: 1500,      // Gewitter-Energie
+    rainRed: 0.5,                            // Niederschlag pro Stunde
+    baseMargin: 200,                         // Wolkenbasis mind. so hoch über Start
+    dirTolerance: 50                         // Abweichung Wind- zu Startrichtung (Grad)
+  }
+};
+
+/* Fluggebiete. Koordinaten und Startrichtungen sind VORLÄUFIG –
+   bitte mit der DHV-Geländedatenbank abgleichen und dann checked:true setzen. */
+var SITES = [
+  {name:"Tegelberg", area:"Schwangau", lat:47.562, lon:10.779, alt:1720, dirs:["N","NO","O"], holfuy:[905]},
+  {name:"Buchenberg", area:"Buching", lat:47.607, lon:10.801, alt:1140, dirs:["N","NO"], holfuy:[511]},
+  {name:"Breitenberg", area:"Pfronten", lat:47.569, lon:10.584, alt:1680, dirs:["N","NO"], holfuy:[676]},
+  {name:"Hörnle", area:"Bad Kohlgrub", lat:47.622, lon:11.049, alt:1390, dirs:["W","NW","SW"], holfuy:[]},
+  {name:"Mittag", area:"Immenstadt", lat:47.547, lon:10.214, alt:1450, dirs:["N","NO","O"], holfuy:[1251]},
+  {name:"Hochgrat", area:"Oberstaufen", lat:47.493, lon:10.080, alt:1700, dirs:["N","NO","S"], holfuy:[]},
+  {name:"Nebelhorn", area:"Oberstdorf", lat:47.420, lon:10.345, alt:1930, dirs:["W","SW","S"], holfuy:[1102,906]},
+  {name:"Fellhorn", area:"Oberstdorf", lat:47.355, lon:10.225, alt:1960, dirs:["N","W","O"], holfuy:[]},
+  {name:"Kanzelwand", area:"Kleinwalsertal", lat:47.343, lon:10.210, alt:2000, dirs:["O","SO"], holfuy:[]},
+  {name:"Neunerköpfle", area:"Tannheimer Tal", lat:47.488, lon:10.545, alt:1860, dirs:["S","SW"], holfuy:[],
+    extra:[["Wind & Webcams (OAL-GS)","https://www.oal-gs.de/wetter/webcams_m_neu.php"]]},
+  {name:"Hahnenkamm", area:"Reutte", lat:47.474, lon:10.735, alt:1720, dirs:["S","SW"], holfuy:[], reserve:true},
+  {name:"Brauneck", area:"Lenggries", lat:47.660, lon:11.525, alt:1500, dirs:["S","SO","W"], holfuy:[], reserve:true}
+];
+SITES.forEach(function(s){ if(s.checked===undefined) s.checked=false; });
+
+/* Föhn-Indikator: Luftdruck Bozen minus München */
+var FOEHN = [{name:"Bozen", lat:46.498, lon:11.355},{name:"München", lat:48.137, lon:11.575}];
+
+/* Skitouren-Regionen (Referenzpunkt auf typischer Tourenhöhe) */
+var REGIONS = [
+  {name:"Allgäuer Alpen", area:"Oberstdorf", lat:47.385, lon:10.300, alt:1800},
+  {name:"Kleinwalsertal", area:"Vorarlberg", lat:47.320, lon:10.130, alt:1800},
+  {name:"Tannheimer Berge", area:"Tirol", lat:47.480, lon:10.520, alt:1700},
+  {name:"Ammergauer Alpen", area:"Bayern", lat:47.550, lon:10.950, alt:1600},
+  {name:"Lechtaler Alpen", area:"Tirol", lat:47.300, lon:10.450, alt:2000},
+  {name:"Zugspitzarena / Ehrwald", area:"Tirol", lat:47.400, lon:10.900, alt:1900},
+  {name:"Spitzingsee", area:"Bayerische Voralpen", lat:47.660, lon:11.880, alt:1500},
+  {name:"Kühtai", area:"Tirol", lat:47.210, lon:11.020, alt:2200}
+];
+
+var LINKS_PARA = [
+  ["DHV-Wetter","https://www.dhv.de/wetter/"],
+  ["Holfuy-Karte","https://holfuy.com/de/map"]
+];
+var LINKS_SKI = [
+  ["Lawinenwarndienst Bayern","https://www.lawinenwarndienst.bayern.de"],
+  ["Lawinenreport Tirol","https://avalanche.report"],
+  ["EAWS Europa-Karte","https://www.avalanches.org"],
+  ["Skitourenguru","https://www.skitourenguru.ch"]
+];
+
+/* =====================================================================
+   Hilfsfunktionen
+   ===================================================================== */
+var COMPASS = {N:0,NO:45,O:90,SO:135,S:180,SW:225,W:270,NW:315};
+var WD = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+var MON = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+function $(id){return document.getElementById(id);}
+function pad(n){return (n<10?"0":"")+n;}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function angDiff(a,b){var d=Math.abs(a-b)%360;return d>180?360-d:d;}
+function dirName(d){var n=["N","NO","O","SO","S","SW","W","NW"];return n[Math.round(d/45)%8];}
+function toUV(s,d){var r=d*Math.PI/180;return [-s*Math.sin(r),-s*Math.cos(r)];}
+function fromUV(u,v){var s=Math.sqrt(u*u+v*v);var d=(Math.atan2(-u,-v)*180/Math.PI+360)%360;return [s,d];}
+function num(x){return (x===null||x===undefined||isNaN(x))?null:x;}
+function dateKey(t){return t.slice(0,10);}
+function parseDay(k){var p=k.split("-");return new Date(+p[0],+p[1]-1,+p[2]);}
+function isWeekend(k){var d=parseDay(k).getDay();return d===0||d===6;}
+function dayLabel(k){var d=parseDay(k);return WD[d.getDay()]+" "+d.getDate()+".";}
+function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+function load(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+
+/* Wind auf Startplatzhöhe aus 10 m- und Druckflächen-Winden interpolieren */
+function windAtAlt(H,i,alt,gridElev){
+  var lv=[
+    {h:gridElev+10, s:num(H.wind_speed_10m[i]), d:num(H.wind_direction_10m[i])},
+    {h:num(H.geopotential_height_850hPa[i]), s:num(H.wind_speed_850hPa[i]), d:num(H.wind_direction_850hPa[i])},
+    {h:num(H.geopotential_height_800hPa[i]), s:num(H.wind_speed_800hPa[i]), d:num(H.wind_direction_800hPa[i])},
+    {h:num(H.geopotential_height_700hPa[i]), s:num(H.wind_speed_700hPa[i]), d:num(H.wind_direction_700hPa[i])}
+  ].filter(function(l){return l.h!==null&&l.s!==null&&l.d!==null;}).sort(function(a,b){return a.h-b.h;});
+  if(!lv.length) return null;
+  if(alt<=lv[0].h) return [lv[0].s,lv[0].d];
+  for(var k=0;k<lv.length-1;k++){
+    var a=lv[k],b=lv[k+1];
+    if(alt>=a.h&&alt<=b.h){
+      var f=(alt-a.h)/(b.h-a.h), ua=toUV(a.s,a.d), ub=toUV(b.s,b.d);
+      return fromUV(ua[0]+(ub[0]-ua[0])*f, ua[1]+(ub[1]-ua[1])*f);
+    }
+  }
+  var t=lv[lv.length-1];return [t.s,t.d];
+}
+
+/* =====================================================================
+   Daten laden
+   ===================================================================== */
+var HOURLY = ["temperature_2m","dew_point_2m","precipitation","weather_code","cloud_cover_low",
+  "wind_speed_10m","wind_direction_10m","wind_gusts_10m","cape","sunshine_duration","pressure_msl",
+  "wind_speed_850hPa","wind_direction_850hPa","geopotential_height_850hPa",
+  "wind_speed_800hPa","wind_direction_800hPa","geopotential_height_800hPa",
+  "wind_speed_700hPa","wind_direction_700hPa","geopotential_height_700hPa"];
+
+function getJSON(url){
+  return fetch(url).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+}
+function paraURL(){
+  var pts=SITES.concat(FOEHN);
+  return "https://api.open-meteo.com/v1/forecast?latitude="+pts.map(function(p){return p.lat;}).join(",")+
+    "&longitude="+pts.map(function(p){return p.lon;}).join(",")+
+    "&hourly="+HOURLY.join(",")+"&models=icon_seamless&timezone=Europe%2FBerlin&forecast_days=8";
+}
+function skiURL(){
+  return "https://api.open-meteo.com/v1/forecast?latitude="+REGIONS.map(function(p){return p.lat;}).join(",")+
+    "&longitude="+REGIONS.map(function(p){return p.lon;}).join(",")+
+    "&elevation="+REGIONS.map(function(p){return p.alt;}).join(",")+
+    "&daily=snowfall_sum,precipitation_sum,temperature_2m_max,temperature_2m_min,sunshine_duration,wind_speed_10m_max"+
+    "&hourly=freezing_level_height&models=icon_seamless&timezone=Europe%2FBerlin&past_days=3&forecast_days=8";
+}
+function asArray(x){return Array.isArray(x)?x:[x];}
+
+/* ---------- Demo-Daten (nur wenn das Laden scheitert) ---------- */
+function rnd(seed){var x=Math.sin(seed)*10000;return x-Math.floor(x);}
+function demoTimes(daysBack,days){
+  var out=[],d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-daysBack);
+  for(var i=0;i<(daysBack+days)*24;i++){var t=new Date(d.getTime()+i*3600000);
+    out.push(t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate())+"T"+pad(t.getHours())+":00");}
+  return out;
+}
+function demoPara(){
+  var times=demoTimes(0,8);
+  return SITES.concat(FOEHN).map(function(p,pi){
+    var H={time:times};HOURLY.forEach(function(v){H[v]=[];});
+    times.forEach(function(t,i){
+      var day=Math.floor(i/24), hr=i%24, base=rnd(day*7.3+1.1), loc=rnd(pi*3.1+day);
+      var w=4+base*22+loc*6, d=(200+base*160+loc*40)%360;
+      H.temperature_2m.push(2+6*Math.sin((hr-6)/24*Math.PI*2)); H.dew_point_2m.push(-3+base*5);
+      H.precipitation.push(base>0.8&&hr>12?0.8:0); H.weather_code.push(base>0.8?61:1);
+      H.cloud_cover_low.push(base*80); H.wind_speed_10m.push(w*0.5); H.wind_direction_10m.push(d);
+      H.wind_gusts_10m.push(w*1.3); H.cape.push(base*300); H.sunshine_duration.push(hr>8&&hr<16?(1-base)*3600:0);
+      H.pressure_msl.push(1015+(pi===SITES.length?base*8:0));
+      H.wind_speed_850hPa.push(w);H.wind_direction_850hPa.push(d);H.geopotential_height_850hPa.push(1500);
+      H.wind_speed_800hPa.push(w*1.2);H.wind_direction_800hPa.push(d);H.geopotential_height_800hPa.push(2000);
+      H.wind_speed_700hPa.push(w*1.6);H.wind_direction_700hPa.push(d);H.geopotential_height_700hPa.push(3050);
+    });
+    return {elevation:900,hourly:H};
+  });
+}
+function demoSki(){
+  return REGIONS.map(function(r,ri){
+    var D={time:[],snowfall_sum:[],precipitation_sum:[],temperature_2m_max:[],temperature_2m_min:[],sunshine_duration:[],wind_speed_10m_max:[]};
+    var d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-3);
+    for(var i=0;i<11;i++){var t=new Date(d.getTime()+i*86400000);var b=rnd(i*5.1+ri);
+      D.time.push(t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate()));
+      D.snowfall_sum.push(b>0.6?Math.round((b-0.6)*60):0);D.precipitation_sum.push(b>0.6?(b-0.6)*40:0);
+      D.temperature_2m_max.push(-2+b*5);D.temperature_2m_min.push(-8+b*4);D.sunshine_duration.push((1-b)*28000);D.wind_speed_10m_max.push(10+b*30);}
+    var ht=demoTimes(3,8),H={time:ht,freezing_level_height:ht.map(function(t,i){return 900+rnd(Math.floor(i/24))*900;})};
+    return {daily:D,hourly:H};
+  });
+}
+
+/* =====================================================================
+   Auswertung Gleitschirm
+   ===================================================================== */
+function rateHour(site,H,i,gridElev,foehnDp){
+  var L=CONFIG.limits, reasons=[], level=0; // 0 grün 1 gelb 2 rot
+  function bump(lv,txt){ if(lv>level) level=lv; reasons.push([lv,txt]); }
+  var sw=windAtAlt(H,i,site.alt,gridElev);
+  var gust=num(H.wind_gusts_10m[i]), up=num(H.wind_speed_700hPa[i]), rain=num(H.precipitation[i])||0,
+      cape=num(H.cape[i])||0, wc=num(H.weather_code[i])||0, low=num(H.cloud_cover_low[i])||0;
+  var T=num(H.temperature_2m[i]), Td=num(H.dew_point_2m[i]);
+  var base=(T!==null&&Td!==null)?Math.round(gridElev+125*Math.max(0,T-Td)):null;
+  var sun=(num(H.sunshine_duration[i])||0)/3600;
+  if(sw){
+    if(sw[0]>L.startWindRed) bump(2,"Wind am Start "+Math.round(sw[0])+" km/h");
+    else if(sw[0]>L.startWindYellow) bump(1,"Wind am Start "+Math.round(sw[0])+" km/h");
+    var best=Math.min.apply(null,site.dirs.map(function(k){return angDiff(sw[1],COMPASS[k]);}));
+    if(sw[0]>8&&best>L.dirTolerance) bump(1,"Windrichtung "+dirName(sw[1])+" passt nicht zum Start ("+site.dirs.join("/")+")");
+  }
+  if(gust!==null){ if(gust>L.gustRed) bump(2,"Böen "+Math.round(gust)+" km/h"); else if(gust>L.gustYellow) bump(1,"Böen "+Math.round(gust)+" km/h"); }
+  if(up!==null){ if(up>L.upperRed) bump(2,"Höhenwind 3000 m "+Math.round(up)+" km/h"); else if(up>L.upperYellow) bump(1,"Höhenwind 3000 m "+Math.round(up)+" km/h"); }
+  if(foehnDp!==null){ if(foehnDp>=L.foehnRed) bump(2,"Föhn (Δp "+foehnDp.toFixed(1)+" hPa)"); else if(foehnDp>=L.foehnYellow) bump(1,"Föhntendenz (Δp "+foehnDp.toFixed(1)+" hPa)"); }
+  if(rain>=L.rainRed) bump(2,"Regen "+rain.toFixed(1)+" mm");
+  if(wc>=95) bump(2,"Gewitter");
+  else if(cape>=L.capeRed) bump(2,"hohes Gewitterrisiko (CAPE "+Math.round(cape)+")");
+  else if(cape>=L.capeYellow) bump(1,"Gewitterrisiko (CAPE "+Math.round(cape)+")");
+  if(base!==null&&base<site.alt+L.baseMargin) bump(1,"Wolkenbasis ~"+base+" m");
+  if(low>75) bump(1,"tiefe Wolken "+Math.round(low)+" %");
+  return {level:level,reasons:reasons,sw:sw,gust:gust,up:up,upDir:num(H.wind_direction_700hPa[i]),rain:rain,cape:cape,base:base,low:low,sun:sun,foehn:foehnDp,hour:+H.time[i].slice(11,13)};
+}
+
+function analysePara(data){
+  var n=SITES.length, bz=data[n].hourly, mu=data[n+1].hourly;
+  var days=[];bz.time.forEach(function(t){var k=dateKey(t);if(days.indexOf(k)<0)days.push(k);});
+  var foehnByIdx=bz.time.map(function(t,i){var a=num(bz.pressure_msl[i]),b=num(mu.pressure_msl[i]);return (a!==null&&b!==null)?a-b:null;});
+  var foehnDays=days.map(function(k){var m=null;bz.time.forEach(function(t,i){var h=+t.slice(11,13);
+    if(dateKey(t)===k&&h>=CONFIG.flightWindow[0]&&h<CONFIG.flightWindow[1]&&foehnByIdx[i]!==null) m=(m===null?foehnByIdx[i]:Math.max(m,foehnByIdx[i]));});return m;});
+  var result=SITES.map(function(site,si){
+    var D=data[si], H=D.hourly, ge=D.elevation||site.alt-600;
+    return {site:site, days:days.map(function(k){
+      var hours=[];
+      H.time.forEach(function(t,i){var h=+t.slice(11,13); if(dateKey(t)===k&&h>=8&&h<=18) hours.push(rateHour(site,H,i,ge,foehnByIdx[i]));});
+      var win=hours.filter(function(x){return x.hour>=CONFIG.flightWindow[0]&&x.hour<CONFIG.flightWindow[1];});
+      var g=win.filter(function(x){return x.level===0;}).length, y=win.filter(function(x){return x.level===1;}).length;
+      var color=!win.length?"grey":(g>=CONFIG.greenHoursForGreenDay?"green":((g+y)>=2?"yellow":"red"));
+      var maxS=0,maxU=0,sun=0;win.forEach(function(x){if(x.sw)maxS=Math.max(maxS,x.sw[0]);if(x.up!==null)maxU=Math.max(maxU,x.up);sun+=x.sun;});
+      return {key:k,hours:hours,green:g,yellow:y,color:color,maxS:Math.round(maxS),maxU:Math.round(maxU),sun:sun};
+    })};
+  });
+  return {days:days,sites:result,foehn:foehnDays};
+}
+
+/* =====================================================================
+   Darstellung
+   ===================================================================== */
+var STATE={mode:load("bw_mode")||"para", para:null, ski:null, demo:false};
+
+function weekendKeys(days){
+  var w=days.filter(isWeekend);
+  // nächstes zusammenhängendes Wochenende (Sa+So oder nur So, wenn heute Sonntag)
+  var out=[];for(var i=0;i<w.length;i++){ if(!out.length||(parseDay(w[i])-parseDay(out[out.length-1]))===86400000) out.push(w[i]); else break; }
+  return out;
+}
+
+function renderPara(){
+  var A=STATE.para; if(!A){$("main").innerHTML="<p class='none'>Lade Prognose …</p>";return;}
+  var html="<h2>Nächstes Wochenende</h2><div class='weekend'>";
+  weekendKeys(A.days).forEach(function(k){
+    var di=A.days.indexOf(k);
+    var ranked=A.sites.filter(function(r){return !r.site.reserve;}).map(function(r,si){return {r:r,d:r.days[di]};})
+      .filter(function(x){return x.d.color!=="red"&&x.d.color!=="grey";})
+      .sort(function(a,b){return (b.d.green*2+b.d.yellow)-(a.d.green*2+a.d.yellow);}).slice(0,4);
+    var fo=A.foehn[di];
+    html+="<div class='wday'><h3>"+(parseDay(k).getDay()===6?"Samstag":"Sonntag")+" "+parseDay(k).getDate()+". "+MON[parseDay(k).getMonth()]+"</h3>";
+    if(fo!==null&&fo>=CONFIG.limits.foehnYellow) html+="<div class='note'>Föhn-Signal: Δp Bozen–München "+fo.toFixed(1)+" hPa</div>";
+    html+=ranked.length?ranked.map(function(x){return "<span class='chip bg-"+x.d.color+"' data-s='"+SITES.indexOf(x.r.site)+"' data-d='"+di+"'>"+esc(x.r.site.name)+" · "+x.d.green+" h</span>";}).join("")
+      :"<div class='none'>Nach Modell kein Gebiet mit fliegbarem Fenster.</div>";
+    html+="</div>";
+  });
+  html+="</div><h2>7-Tage-Übersicht</h2><div class='tablewrap'><table><thead><tr><th></th>";
+  A.days.forEach(function(k){html+="<th class='"+(isWeekend(k)?"we":"")+"'>"+dayLabel(k)+"</th>";});
+  html+="</tr></thead><tbody><tr class='foehn'><td class='site'><div class='sname'>Föhn-Index</div><div class='smeta'>Δp Bozen – München</div></td>";
+  A.foehn.forEach(function(v){var c=v===null?"grey":(v>=CONFIG.limits.foehnRed?"red":(v>=CONFIG.limits.foehnYellow?"yellow":"green"));
+    html+="<td class='cell'><div class='c bg-"+c+"' style='cursor:default'><div class='h'>"+(v===null?"–":v.toFixed(1))+"</div><div class='s'>hPa</div></div></td>";});
+  html+="</tr>";
+  A.sites.forEach(function(r){
+    var si=SITES.indexOf(r.site);
+    html+="<tr class='"+(r.site.reserve?"reserve":"")+"'><td class='site'><div class='sname'>"+esc(r.site.name)+(r.site.reserve?" <span class='smeta'>(Reserve)</span>":"")+"</div><div class='smeta'>"+
+      esc(r.site.area)+" · "+r.site.alt+" m · "+r.site.dirs.join("/")+(r.site.checked?"":" <span class='warn' title='Startrichtung noch prüfen'>⚠</span>")+(r.site.holfuy.length?" · 📡":"")+"</div></td>";
+    r.days.forEach(function(d,di){
+      html+="<td class='cell'><div class='c bg-"+d.color+(isWeekend(d.key)?" we":"")+"' data-s='"+si+"' data-d='"+di+"'><div class='h'>"+(d.color==="grey"?"–":d.green+" h")+"</div><div class='s'>S "+d.maxS+" · H "+d.maxU+"</div></div></td>";
+    });
+    html+="</tr>";
+  });
+  html+="</tbody></table></div><div class='legend'>Zahl = grüne Stunden zwischen "+CONFIG.flightWindow[0]+" und "+CONFIG.flightWindow[1]+" Uhr · S = max. Wind auf Startplatzhöhe · H = max. Höhenwind ~3000 m (km/h) · 📡 = Live-Station vorhanden · ⚠ = Startrichtung noch nicht geprüft · Antippen für Stundenwerte.</div>";
+  html+="<h2>Links</h2><div class='links'>"+LINKS_PARA.map(function(l){return "<a href='"+l[1]+"' target='_blank' rel='noopener'>"+esc(l[0])+"</a>";}).join("")+"</div>";
+  $("main").innerHTML=html;
+}
+
+function arrow(dir){return "<span class='arrow' style='transform:rotate("+Math.round(dir+180)+"deg)'>↑</span>";}
+
+function openDetail(si,di){
+  var r=STATE.para.sites[si], d=r.days[di], s=r.site;
+  var h="<div class='dhead'><div><h2 style='margin:0 0 4px;color:var(--text);font-size:22px;text-transform:none;letter-spacing:0'>"+esc(s.name)+" – "+dayLabel(d.key)+"</h2>"+
+    "<div class='smeta'>"+esc(s.area)+" · Start "+s.alt+" m · Startrichtung "+s.dirs.join("/")+(s.checked?"":" (noch prüfen)")+" · Sonne im Fenster ~"+d.sun.toFixed(1)+" h</div></div><button id='close'>×</button></div>";
+  h+="<div class='tablewrap' style='margin-top:12px'><table class='htable'><thead><tr><th>Uhr</th><th></th><th>Wind Start</th><th>Böen</th><th>Höhe 3000 m</th><th>Basis</th><th>Regen</th><th>CAPE</th><th>Föhn Δp</th><th>Hinweise</th></tr></thead><tbody>";
+  var cls=["green","yellow","red"];
+  d.hours.forEach(function(x){
+    h+="<tr><td>"+pad(x.hour)+"</td><td><div class='r bg-"+cls[x.level]+"' style='width:14px;height:14px;border-radius:7px;margin:auto'></div></td>"+
+      "<td>"+(x.sw?arrow(x.sw[1])+" "+dirName(x.sw[1])+" "+Math.round(x.sw[0]):"–")+"</td><td>"+(x.gust===null?"–":Math.round(x.gust))+"</td>"+
+      "<td>"+(x.up===null?"–":(x.upDir!==null?arrow(x.upDir)+" ":"")+Math.round(x.up))+"</td><td>"+(x.base===null?"–":x.base)+"</td>"+
+      "<td>"+(x.rain?x.rain.toFixed(1):"0")+"</td><td>"+Math.round(x.cape)+"</td><td>"+(x.foehn===null?"–":x.foehn.toFixed(1))+"</td>"+
+      "<td style='text-align:left;font-size:12px;color:var(--muted)'>"+x.reasons.map(function(q){return esc(q[1]);}).join(", ")+"</td></tr>";
+  });
+  h+="</tbody></table></div><div class='reasons'>Wind in km/h, Pfeil zeigt die Strömungsrichtung. Basis = geschätzte Wolkenbasis in m. Böen sind Modellwerte in Bodennähe.</div>";
+  h+="<h2>Live & Links</h2><div class='links'>";
+  s.holfuy.forEach(function(id){h+="<a href='https://holfuy.com/de/weather/"+id+"' target='_blank' rel='noopener'>Holfuy "+id+" live</a>";});
+  (s.extra||[]).forEach(function(l){h+="<a href='"+l[1]+"' target='_blank' rel='noopener'>"+esc(l[0])+"</a>";});
+  h+="<a href='https://www.google.com/search?q="+encodeURIComponent("Webcam "+s.name+" "+s.area)+"' target='_blank' rel='noopener'>Webcam suchen</a>";
+  h+="<a href='https://www.dhv.de/wetter/' target='_blank' rel='noopener'>DHV-Wetter</a></div>";
+  s.holfuy.forEach(function(id){h+="<iframe class='holfuy' loading='lazy' src='https://widget.holfuy.com/?station="+id+"&su=km%2Fh&t=C&lang=de&mode=detailed'></iframe>";});
+  $("dbox").innerHTML=h; $("detail").style.display="block"; document.body.style.overflow="hidden";
+  $("close").onclick=closeDetail;
+}
+function closeDetail(){$("detail").style.display="none";document.body.style.overflow="";$("dbox").innerHTML="";}
+
+function renderSki(){
+  var S=STATE.ski; if(!S){$("main").innerHTML="<p class='none'>Lade Prognose …</p>";return;}
+  var todayK=(function(){var d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());})();
+  var rows=S.map(function(R,ri){
+    var D=R.daily, ti=D.time.indexOf(todayK); if(ti<0) ti=3;
+    var past=0;for(var i=Math.max(0,ti-3);i<ti;i++) past+=D.snowfall_sum[i]||0;
+    var next3=0;for(i=ti;i<ti+3&&i<D.time.length;i++) next3+=D.snowfall_sum[i]||0;
+    var fl={};R.hourly.time.forEach(function(t,i){var k=dateKey(t),v=R.hourly.freezing_level_height[i];if(v!==null&&(fl[k]===undefined||v>fl[k]))fl[k]=v;});
+    return {reg:REGIONS[ri],D:D,ti:ti,past:Math.round(past),next3:Math.round(next3),fl:fl};
+  });
+  var html="<div class='note'>Die Lawinengefahr steht hier bewusst nicht als Ampel. Vor jeder Tour den Lawinenlagebericht lesen (Links unten).</div>";
+  html+="<h2>Wo schneit's als Nächstes? (3 Tage)</h2><div class='rank'>";
+  rows.slice().sort(function(a,b){return b.next3-a.next3;}).forEach(function(x){
+    html+="<div><span>"+esc(x.reg.name)+" <span class='smeta'>"+esc(x.reg.area)+"</span></span><b>"+x.next3+" cm</b></div>";});
+  html+="</div><h2>Neuschnee pro Region</h2><div class='grid'>";
+  rows.forEach(function(x){
+    var D=x.D, idx=[];for(var i=x.ti;i<D.time.length&&idx.length<8;i++) idx.push(i);
+    var max=Math.max(10,Math.max.apply(null,idx.map(function(i){return D.snowfall_sum[i]||0;})));
+    var wk=weekendKeys(D.time.slice(x.ti)), wkTxt=wk.map(function(k){var i=D.time.indexOf(k);
+      return WD[parseDay(k).getDay()]+": "+Math.round(D.temperature_2m_min[i])+"/"+Math.round(D.temperature_2m_max[i])+"°, ☀ "+((D.sunshine_duration[i]||0)/3600).toFixed(0)+" h, Wind "+Math.round(D.wind_speed_10m_max[i]||0);}).join(" · ");
+    html+="<div class='card'><h3>"+esc(x.reg.name)+"</h3><div class='smeta'>"+esc(x.reg.area)+" · Referenz "+x.reg.alt+" m</div>";
+    html+="<div class='bars'>"+idx.map(function(i){var v=Math.round(D.snowfall_sum[i]||0);return "<div class='bar'>"+(v?"<b>"+v+"</b>":"")+"<i style='height:"+Math.round(v/max*70)+"px'></i></div>";}).join("")+"</div>";
+    html+="<div class='barlbl'>"+idx.map(function(i){return "<span class='"+(isWeekend(D.time[i])?"we":"")+"'>"+WD[parseDay(D.time[i]).getDay()]+"</span>";}).join("")+"</div>";
+    html+="<div class='kv'><span>Neuschnee letzte 72 h</span><b>"+x.past+" cm</b></div>";
+    html+="<div class='kv'><span>Nullgradgrenze heute max.</span><b>"+(x.fl[D.time[x.ti]]!==undefined?Math.round(x.fl[D.time[x.ti]]/50)*50+" m":"–")+"</b></div>";
+    if(wkTxt) html+="<div class='kv'><span>Wochenende</span><b style='text-align:right'>"+wkTxt+"</b></div>";
+    html+="</div>";
+  });
+  html+="</div><h2>Lawinenlage & Touren</h2><div class='links'>"+LINKS_SKI.map(function(l){return "<a href='"+l[1]+"' target='_blank' rel='noopener'>"+esc(l[0])+"</a>";}).join("")+"</div>";
+  $("main").innerHTML=html;
+}
+
+function render(){
+  $("mPara").className=STATE.mode==="para"?"on":""; $("mSki").className=STATE.mode==="ski"?"on":"";
+  $("demo").style.display=STATE.demo?"block":"none";
+  if(STATE.mode==="para") renderPara(); else renderSki();
+}
+
+/* =====================================================================
+   Ablauf
+   ===================================================================== */
+function refresh(){
+  $("updated").textContent="Lade Daten …";
+  Promise.all([
+    getJSON(paraURL()).then(asArray).catch(function(e){return null;}),
+    getJSON(skiURL()).then(asArray).catch(function(e){return null;})
+  ]).then(function(res){
+    STATE.demo=!res[0]||!res[1];
+    STATE.para=analysePara(res[0]||demoPara());
+    STATE.ski=res[1]||demoSki();
+    var n=new Date(); $("updated").textContent=(STATE.demo?"Demo-Modus · ":"Stand ")+pad(n.getHours())+":"+pad(n.getMinutes())+" Uhr";
+    render();
+  });
+}
+function tick(){
+  var n=new Date();
+  $("clock").textContent=pad(n.getHours())+":"+pad(n.getMinutes());
+  $("date").textContent=["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"][n.getDay()]+", "+n.getDate()+". "+MON[n.getMonth()]+" "+n.getFullYear();
+  var h=n.getHours(), a=CONFIG.nightDim[0], b=CONFIG.nightDim[1];
+  document.body.className=(h>=a||h<b)?"night":"";
+}
+$("mPara").onclick=function(){STATE.mode="para";store("bw_mode","para");render();};
+$("mSki").onclick=function(){STATE.mode="ski";store("bw_mode","ski");render();};
+$("reload").onclick=refresh;
+$("main").addEventListener("click",function(e){
+  var el=e.target; while(el&&el!==this&&!(el.getAttribute&&el.getAttribute("data-s")!==null)) el=el.parentNode;
+  if(el&&el!==this) openDetail(+el.getAttribute("data-s"),+el.getAttribute("data-d"));
+});
+$("detail").addEventListener("click",function(e){if(e.target===this)closeDetail();});
+tick(); setInterval(tick,15000);
+render(); refresh(); setInterval(refresh,CONFIG.refreshMinutes*60000);
+</script>
+</body>
+</html>
