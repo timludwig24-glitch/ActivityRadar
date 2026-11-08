@@ -130,13 +130,19 @@
   .tile .fl{height:18px;font-size:14px}
   .soft-green{background:rgba(47,191,113,.28)} .soft-yellow{background:rgba(242,201,76,.25)} .soft-red{background:rgba(235,87,87,.28)}
   details.all{margin-top:10px} details.all summary{color:var(--accent);font-size:15px;cursor:pointer;padding:6px 0}
+  /* Skitouren */
+  .lwd{background:#3a2a10;border-left:4px solid var(--yellow);border-radius:10px;padding:12px 14px;font-size:15px}
+  .lwd .links a{background:#5a3b00;color:#ffd98a}
+  .soft-blue{background:rgba(92,200,255,.28)} .soft-dblue{background:rgba(47,111,153,.35)} .soft-grey{background:rgba(69,82,92,.4)}
+  @keyframes fall{0%{transform:translateY(-6px);opacity:0}30%{opacity:1}100%{transform:translateY(6px);opacity:0}}
+  .flake{animation:fall 2.2s linear infinite}
   footer{color:var(--muted);font-size:12px;padding:0 18px 24px;line-height:1.5}
 </style>
 </head>
 <body>
 <header>
   <div><div class="clock" id="clock">--:--</div><div class="date" id="date"></div></div>
-  <div class="modes"><button id="mPara" class="on">🪂 Gleitschirm</button><button id="mSki">⛷ Skitour</button></div>
+  <div class="modes"><button id="mPara" class="on">🪂 Gleitschirm</button><button id="mSki">⛷ Skitouren</button></div>
   <div class="status"><div id="updated">Lade Daten …</div><button id="reload">Aktualisieren</button></div>
 </header>
 <div class="demo" id="demo">DEMO-DATEN – das sind erfundene Werte, keine Prognose. Die Seite konnte die Wetterdaten hier nicht laden (z. B. in einer Vorschau ohne Internetzugriff).</div>
@@ -201,27 +207,26 @@ var MAP_TILES = {
 /* Föhn-Indikator: Luftdruck Bozen minus München */
 var FOEHN = [{name:"Bozen", lat:46.498, lon:11.355},{name:"München", lat:48.137, lon:11.575}];
 
-/* Skitouren-Regionen (Referenzpunkt auf typischer Tourenhöhe) */
+/* Skitouren-Regionen: Referenzpunkt auf typischer Tourenhöhe, lwd = zuständiger Lawinenwarndienst */
 var REGIONS = [
-  {name:"Allgäuer Alpen", area:"Oberstdorf", lat:47.385, lon:10.300, alt:1800},
-  {name:"Kleinwalsertal", area:"Vorarlberg", lat:47.320, lon:10.130, alt:1800},
-  {name:"Tannheimer Berge", area:"Tirol", lat:47.480, lon:10.520, alt:1700},
-  {name:"Ammergauer Alpen", area:"Bayern", lat:47.550, lon:10.950, alt:1600},
-  {name:"Lechtaler Alpen", area:"Tirol", lat:47.300, lon:10.450, alt:2000},
-  {name:"Zugspitzarena / Ehrwald", area:"Tirol", lat:47.400, lon:10.900, alt:1900},
-  {name:"Spitzingsee", area:"Bayerische Voralpen", lat:47.660, lon:11.880, alt:1500},
-  {name:"Kühtai", area:"Tirol", lat:47.210, lon:11.020, alt:2200}
+  {name:"Allgäuer Alpen", area:"Oberstdorf", lat:47.385, lon:10.300, alt:1800, lwd:"BY"},
+  {name:"Kleinwalsertal", area:"Vorarlberg", lat:47.320, lon:10.130, alt:1800, lwd:"V"},
+  {name:"Tannheimer Berge", area:"Tirol", lat:47.480, lon:10.520, alt:1700, lwd:"T"},
+  {name:"Ammergauer Alpen", area:"Bayern", lat:47.550, lon:10.950, alt:1600, lwd:"BY"},
+  {name:"Lechtaler Alpen", area:"Tirol", lat:47.300, lon:10.450, alt:2000, lwd:"T"},
+  {name:"Zugspitzarena / Ehrwald", area:"Tirol", lat:47.400, lon:10.900, alt:1900, lwd:"T"},
+  {name:"Spitzingsee", area:"Bayerische Voralpen", lat:47.660, lon:11.880, alt:1500, lwd:"BY"},
+  {name:"Kühtai", area:"Tirol", lat:47.210, lon:11.020, alt:2200, lwd:"T"}
 ];
+var LWD = {
+  BY:["Lawinenwarndienst Bayern","https://www.lawinenwarndienst.bayern.de"],
+  T:["Lawinenreport Tirol","https://avalanche.report"],
+  V:["Lawinenlage Vorarlberg (EAWS-Karte)","https://www.avalanches.org"]
+};
 
 var LINKS_PARA = [
   ["DHV-Wetter","https://www.dhv.de/wetter/"],
   ["Holfuy-Karte","https://holfuy.com/de/map"]
-];
-var LINKS_SKI = [
-  ["Lawinenwarndienst Bayern","https://www.lawinenwarndienst.bayern.de"],
-  ["Lawinenreport Tirol","https://avalanche.report"],
-  ["EAWS Europa-Karte","https://www.avalanches.org"],
-  ["Skitourenguru","https://www.skitourenguru.ch"]
 ];
 
 /* =====================================================================
@@ -298,13 +303,6 @@ function paraURL(){
     "&longitude="+pts.map(function(p){return p.lon;}).join(",")+
     "&hourly="+HOURLY.join(",")+"&models=icon_seamless&timezone=Europe%2FBerlin&forecast_days=8";
 }
-function skiURL(){
-  return "https://api.open-meteo.com/v1/forecast?latitude="+REGIONS.map(function(p){return p.lat;}).join(",")+
-    "&longitude="+REGIONS.map(function(p){return p.lon;}).join(",")+
-    "&elevation="+REGIONS.map(function(p){return p.alt;}).join(",")+
-    "&daily=snowfall_sum,precipitation_sum,temperature_2m_max,temperature_2m_min,sunshine_duration,wind_speed_10m_max"+
-    "&hourly=freezing_level_height&models=icon_seamless&timezone=Europe%2FBerlin&past_days=3&forecast_days=8";
-}
 function asArray(x){return Array.isArray(x)?x:[x];}
 
 /* ---------- Demo-Daten (nur wenn das Laden scheitert) ---------- */
@@ -335,19 +333,6 @@ function demoPara(){
     return {elevation:900,hourly:H};
   });
 }
-function demoSki(){
-  return REGIONS.map(function(r,ri){
-    var D={time:[],snowfall_sum:[],precipitation_sum:[],temperature_2m_max:[],temperature_2m_min:[],sunshine_duration:[],wind_speed_10m_max:[]};
-    var d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-3);
-    for(var i=0;i<11;i++){var t=new Date(d.getTime()+i*86400000);var b=rnd(i*5.1+ri);
-      D.time.push(t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate()));
-      D.snowfall_sum.push(b>0.6?Math.round((b-0.6)*60):0);D.precipitation_sum.push(b>0.6?(b-0.6)*40:0);
-      D.temperature_2m_max.push(-2+b*5);D.temperature_2m_min.push(-8+b*4);D.sunshine_duration.push((1-b)*28000);D.wind_speed_10m_max.push(10+b*30);}
-    var ht=demoTimes(3,8),H={time:ht,freezing_level_height:ht.map(function(t,i){return 900+rnd(Math.floor(i/24))*900;})};
-    return {daily:D,hourly:H};
-  });
-}
-
 /* =====================================================================
    Auswertung Gleitschirm
    ===================================================================== */
@@ -580,37 +565,6 @@ function drawParaMap(){
   }));
 }
 
-/* Skitouren: einfache Tourenwetter-Einstufung (OHNE Lawinenlage!) */
-function skiDayInfo(R,i){
-  var D=R.daily, snow72=0;for(var j=Math.max(0,i-3);j<i;j++) snow72+=D.snowfall_sum[j]||0;
-  var sun=(D.sunshine_duration[i]||0)/3600, wind=D.wind_speed_10m_max[i]||0, today=D.snowfall_sum[i]||0;
-  var cls=(snow72>=10&&sun>=4&&wind<40&&today<3)?"good":(((snow72>=5||sun>=4)&&wind<50)?"ok":"poor");
-  return {snow72:Math.round(snow72),sun:sun,wind:Math.round(wind),today:Math.round(today),cls:cls};
-}
-function rankSki(i){
-  var order={good:0,ok:1,poor:2};
-  return STATE.ski.map(function(R,ri){return {reg:REGIONS[ri],info:skiDayInfo(R,i)};}).sort(function(a,b){
-    return (order[a.info.cls]-order[b.info.cls])||(b.info.snow72-a.info.snow72)||(driveMin(a.reg)-driveMin(b.reg));});
-}
-function skiTxt(x){return x.info.snow72+" cm Neuschnee (72 h), ☀ "+x.info.sun.toFixed(0)+" h, Wind "+x.info.wind+" km/h"+(x.info.today?", "+x.info.today+" cm Schneefall am Tag":"");}
-function bestSkiHTML(i){
-  var list=rankSki(i), b=list[0], k=STATE.ski[0].daily.time[i];
-  var lbl={good:"Pulver + Sonne",ok:"brauchbares Tourenwetter",poor:"eher kein Tourenwetter"}[b.info.cls];
-  // bei gleich guter Einstufung: das nächstgelegene zuerst
-  var same=list.filter(function(x){return x.info.cls===b.info.cls&&x.info.snow72>=b.info.snow72-5;}).sort(function(a,c){return driveMin(a.reg)-driveMin(c.reg);});
-  b=same[0]||b;
-  var more=list.filter(function(x){return x!==b;}).slice(0,3).map(function(x){return esc(x.reg.name)+" ("+x.info.snow72+" cm, "+fmtDrive(x.reg.drive).replace("🚗 ","")+")";}).join(" · ");
-  return "<div class='smeta'>"+dayLabel(k)+" · "+lbl+"</div><div class='big'><span style='color:"+COLORS[b.info.cls]+"'>●</span> "+esc(b.reg.name)+"</div><div>"+
-    skiTxt(b)+"</div><div>"+fmtDrive(b.reg.drive)+"</div><div class='more'>Weitere: "+more+"</div>";
-}
-function drawSkiMap(i){
-  makeMap(STATE.ski.map(function(R,ri){
-    var info=skiDayInfo(R,i), reg=REGIONS[ri];
-    return {lat:reg.lat,lon:reg.lon,color:COLORS[info.cls],label:reg.name+" "+info.snow72+" cm",
-      popup:"<b>"+esc(reg.name)+"</b><br>"+esc(reg.area)+"<br>"+skiTxt({info:info})+"<br>"+fmtDrive(reg.drive)+"<br><i>Lawinenlage separat prüfen!</i>"};
-  }));
-}
-
 function arrow(dir){return "<span class='arrow' style='transform:rotate("+Math.round(dir+180)+"deg)'>↑</span>";}
 
 /* ---------- Symbole (SVG) ---------- */
@@ -713,43 +667,203 @@ function selectHour(i){
 }
 function closeDetail(){$("detail").style.display="none";document.body.style.overflow="";$("dbox").innerHTML="";}
 
+/* =====================================================================
+   SKITOUREN
+   ===================================================================== */
+var SKI_HOURLY=["snowfall","snow_depth","temperature_2m","apparent_temperature","precipitation","cloud_cover","cloud_cover_low",
+  "wind_gusts_10m","freezing_level_height","wind_speed_700hPa"];
+function skiURL(){
+  return "https://api.open-meteo.com/v1/forecast?latitude="+REGIONS.map(function(p){return p.lat;}).join(",")+
+    "&longitude="+REGIONS.map(function(p){return p.lon;}).join(",")+
+    "&elevation="+REGIONS.map(function(p){return p.alt;}).join(",")+
+    "&hourly="+SKI_HOURLY.join(",")+"&daily=sunrise,sunshine_duration"+
+    "&models=icon_seamless&timezone=Europe%2FBerlin&past_days=3&forecast_days=8";
+}
+function demoSki(){
+  var ht=demoTimes(3,8);
+  return REGIONS.map(function(r,ri){
+    var H={time:ht};SKI_HOURLY.forEach(function(v){H[v]=[];});
+    var depth=0.2+rnd(ri*7)*0.8;
+    ht.forEach(function(t,i){var day=Math.floor(i/24),hr=i%24,b=rnd(day*5.1+ri*0.7),sn=(b>0.65&&(hr<8||hr>18))?(b-0.65)*4:0;
+      depth+=sn/100;H.snowfall.push(sn);H.snow_depth.push(depth);
+      var tt=-6+b*5+4*Math.sin((hr-8)/24*Math.PI*2);H.temperature_2m.push(tt);H.apparent_temperature.push(tt-6);
+      H.precipitation.push(sn*0.8);H.cloud_cover.push(b*100);H.cloud_cover_low.push(b>0.65?85:b*40);
+      H.wind_gusts_10m.push(15+b*40);H.freezing_level_height.push(800+b*1200);H.wind_speed_700hPa.push(10+b*45);});
+    var D={time:[],sunrise:[],sunshine_duration:[]};
+    for(var d=0;d<11;d++){var k=ht[d*24].slice(0,10);D.time.push(k);D.sunrise.push(k+"T07:2"+(d%10));D.sunshine_duration.push((1-rnd(d*5.1+ri*0.7))*30000);}
+    return {hourly:H,daily:D};
+  });
+}
+
+var QUAL={
+  pulver:{i:"❄",t:"Pulver",r:0}, firn:{i:"☀",t:"Firn-Chance",r:1}, alt:{i:"🧊",t:"Altschnee / Harsch",r:2},
+  wind:{i:"🌬",t:"Windbeeinflusst",r:3}, nass:{i:"💧",t:"Nass / Sulz",r:4}, wenig:{i:"🪨",t:"Zu wenig Schnee",r:5}
+};
+var SKICLS={good:"Top-Tourentag",ok:"Brauchbar",poor:"Eher nicht"};
+
+function analyseSki(raw){
+  var todayK=(function(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());})(new Date());
+  var days=[];raw[0].daily.time.forEach(function(k){if(k>=todayK&&days.length<8)days.push(k);});
+  var regions=raw.map(function(R,ri){
+    var H=R.hourly, reg=REGIONS[ri], idx={};H.time.forEach(function(t,i){idx[t]=i;});
+    function rng(a,b,v,f,init){var x=init;for(var i=Math.max(0,a);i<=Math.min(b,H.time.length-1);i++){var q=num(H[v][i]);if(q!==null)x=f(x,q);}return x;}
+    function sum(a,b,v){return rng(a,b,v,function(x,q){return x+q;},0);}
+    function max(a,b,v){return rng(a,b,v,function(x,q){return x===null?q:Math.max(x,q);},null);}
+    function min(a,b,v){return rng(a,b,v,function(x,q){return x===null?q:Math.min(x,q);},null);}
+    function avg(a,b,v){var s=0,n=0;for(var i=Math.max(0,a);i<=Math.min(b,H.time.length-1);i++){var q=num(H[v][i]);if(q!==null){s+=q;n++;}}return n?s/n:null;}
+    return {reg:reg, days:days.map(function(k){
+      var i7=idx[k+"T07:00"]; if(i7===undefined) return null;
+      var di=R.daily.time.indexOf(k);
+      var o={key:k,
+        new24:Math.round(sum(i7-24,i7-1,"snowfall")), new72:Math.round(sum(i7-72,i7-1,"snowfall")),
+        depth:num(H.snow_depth[i7])===null?null:Math.round(H.snow_depth[i7]*100),
+        tNight:min(i7-11,i7,"temperature_2m"), cNight:avg(i7-11,i7-1,"cloud_cover"),
+        tMax:max(i7,i7+7,"temperature_2m"), feel:min(i7,i7+7,"apparent_temperature"),
+        gust:max(i7,i7+7,"wind_gusts_10m"), up:max(i7,i7+7,"wind_speed_700hPa"),
+        low:avg(i7+1,i7+6,"cloud_cover_low"), pWin:sum(i7,i7+7,"precipitation"), sWin:sum(i7,i7+7,"snowfall"),
+        fl:max(i7,i7+7,"freezing_level_height"),
+        sun:di>=0?(R.daily.sunshine_duration[di]||0)/3600:0, sunrise:di>=0&&R.daily.sunrise[di]?R.daily.sunrise[di].slice(11,16):null,
+        hints:[]};
+      var rain=0;for(var j=Math.max(0,i7-48);j<=i7+7&&j<H.time.length;j++){var p=num(H.precipitation[j])||0,f=num(H.freezing_level_height[j]);if(p>0.2&&f!==null&&f>reg.alt+300)rain+=p;}
+      var windy=(max(i7-72,i7,"wind_gusts_10m")||0)>=50||(max(i7-72,i7,"wind_speed_700hPa")||0)>=45;
+      var visBad=(o.low!==null&&o.low>=70)||o.sWin>=2;
+      // Schneequalität (grobe Schätzung aus Wetterdaten)
+      var q;
+      if(o.depth!==null&&o.depth<30) q="wenig";
+      else if(rain>=2||(o.tNight!==null&&o.tNight>0&&o.tMax>3)) q="nass";
+      else if(o.new72>=10&&windy) q="wind";
+      else if(o.new72>=10&&o.tMax!==null&&o.tMax<=1) q="pulver";
+      else if(o.new72<3&&o.cNight!==null&&o.cNight<40&&o.tNight!==null&&o.tNight<=-1&&o.tMax>=2) q="firn";
+      else q="alt";
+      o.q=q;
+      if(o.new72>=5&&windy) o.hints.push("🌬 Viel Wind bei/nach Neuschnee – Triebschnee möglich, im Lagebericht prüfen");
+      if(rain>=2) o.hints.push("🌧 Regen auf Schnee ("+rain.toFixed(0)+" mm bis "+Math.round(o.fl/100)*100+" m)");
+      if(visBad) o.hints.push("🌫 Schlechte Sicht – Orientierung schwierig");
+      if(o.pWin>1&&!visBad) o.hints.push("🌨 Niederschlag während der Tour ("+o.pWin.toFixed(1)+" mm)");
+      if(o.feel!==null&&o.feel<=-15) o.hints.push("🥶 Gefühlt bis "+Math.round(o.feel)+" °C");
+      if(q==="firn") o.hints.push("⏰ Firn: früh starten, Abfahrt wenn die Oberfläche aufgefirnt ist");
+      if(o.tMax!==null&&o.tMax>4) o.hints.push("🌡 Warm (bis "+Math.round(o.tMax)+" °C) – Schnee wird im Tagesverlauf nass");
+      if((o.up||0)>=45) o.hints.push("💨 Starker Gipfelwind ~3000 m: "+Math.round(o.up)+" km/h");
+      var poor=visBad||o.pWin>1||(o.gust||0)>=60||(o.up||0)>=60||q==="wenig";
+      var good=!poor&&o.sun>=4&&(o.gust||0)<45&&(o.up||0)<45&&(q==="pulver"||q==="firn");
+      o.cls=poor?"poor":(good?"good":"ok");
+      return o;
+    })};
+  });
+  return {days:days,regions:regions};
+}
+
+function rankSkiDay(i){
+  var order={good:0,ok:1,poor:2};
+  return STATE.ski.regions.filter(function(r){return r.days[i];}).map(function(r){return {r:r,o:r.days[i]};}).sort(function(a,b){
+    return (order[a.o.cls]-order[b.o.cls])||(QUAL[a.o.q].r-QUAL[b.o.q].r)||(b.o.new72-a.o.new72)||(driveMin(a.r.reg)-driveMin(b.r.reg));});
+}
+function skiLine(o){
+  return QUAL[o.q].i+" "+QUAL[o.q].t+" · ❄ "+o.new72+" cm in 72 h · Schneehöhe "+(o.depth===null?"–":o.depth+" cm")+" · ☀ "+o.sun.toFixed(0)+" h";
+}
+function bestSkiHTML(i){
+  var list=rankSkiDay(i), k=STATE.ski.days[i]; if(!list.length) return "–";
+  var b=list[0];
+  // gleich gut, aber näher? dann das nähere nehmen
+  var same=list.filter(function(x){return x.o.cls===b.o.cls&&x.o.q===b.o.q&&x.o.new72>=b.o.new72-5;}).sort(function(a,c){return driveMin(a.r.reg)-driveMin(c.r.reg);});
+  b=same[0]||b;
+  var more=list.filter(function(x){return x!==b;}).slice(0,3).map(function(x){
+    return QUAL[x.o.q].i+" "+esc(x.r.reg.name)+" ("+fmtDrive(x.r.reg.drive).replace("🚗 ","")+")";}).join(" · ");
+  return "<div class='smeta'>"+dayLabel(k)+" · "+SKICLS[b.o.cls]+"</div><div class='big'><span style='color:"+COLORS[b.o.cls]+"'>●</span> "+esc(b.r.reg.name)+"</div>"+
+    "<div>"+skiLine(b.o)+"</div><div>"+fmtDrive(b.r.reg.drive)+(b.o.sunrise?" · Sonnenaufgang "+b.o.sunrise:"")+"</div>"+
+    (b.o.hints.length?"<div class='more'>"+esc(b.o.hints.slice(0,2).join(" · "))+"</div>":"")+
+    "<div class='more'>Weitere: "+more+"</div>";
+}
+function drawSkiMap(i){
+  makeMap(STATE.ski.regions.filter(function(r){return r.days[i];}).map(function(r){
+    var o=r.days[i], reg=r.reg, ri=REGIONS.indexOf(reg);
+    return {lat:reg.lat,lon:reg.lon,color:COLORS[o.cls],label:reg.name+" ❄"+o.new72,
+      icon:function(z){return "<div style='width:"+z+"px;height:"+z+"px;border-radius:50%;background:"+COLORS[o.cls]+";border:3px solid #0d1215;display:flex;align-items:center;justify-content:center;font-size:"+Math.round(z*0.5)+"px;animation:pop .4s ease-out both'>"+QUAL[o.q].i+"</div>";},
+      big:false,
+      popup:"<b>"+esc(reg.name)+"</b><br>"+esc(reg.area)+"<br>"+skiLine(o)+"<br>"+fmtDrive(reg.drive)+
+        "<br><i>Lawinenlage separat prüfen!</i><br><button onclick='openSkiDetail("+ri+","+i+")'>Details</button>"};
+  }));
+}
+
+function lwdLinks(cls){
+  var used={};REGIONS.forEach(function(r){used[r.lwd]=1;});
+  return Object.keys(LWD).filter(function(k){return used[k];}).map(function(k){
+    return "<a class='"+(cls||"")+"' href='"+LWD[k][1]+"' target='_blank' rel='noopener'>⚠ "+esc(LWD[k][0])+"</a>";}).join("");
+}
+
 function renderSki(){
   var S=STATE.ski; if(!S){$("main").innerHTML="<p class='none'>Lade Prognose …</p>";return;}
-  var todayK=(function(){var d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());})();
-  var rows=S.map(function(R,ri){
-    var D=R.daily, ti=D.time.indexOf(todayK); if(ti<0) ti=3;
-    var past=0;for(var i=Math.max(0,ti-3);i<ti;i++) past+=D.snowfall_sum[i]||0;
-    var next3=0;for(i=ti;i<ti+3&&i<D.time.length;i++) next3+=D.snowfall_sum[i]||0;
-    var fl={};R.hourly.time.forEach(function(t,i){var k=dateKey(t),v=R.hourly.freezing_level_height[i];if(v!==null&&(fl[k]===undefined||v>fl[k]))fl[k]=v;});
-    return {reg:REGIONS[ri],D:D,ti:ti,past:Math.round(past),next3:Math.round(next3),fl:fl};
-  });
-  var html="<div class='note'>Die Lawinengefahr steht hier bewusst nicht als Ampel. Vor jeder Tour den Lawinenlagebericht lesen (Links unten).</div>";
-  var DT=S[0].daily.time, t0=rows[0].ti, sdays=[];for(var q=t0;q<DT.length&&sdays.length<8;q++) sdays.push(q);
-  if(STATE.skiDay===null||sdays.indexOf(STATE.skiDay)<0){var wk0=weekendKeys(DT.slice(t0));STATE.skiDay=wk0.length?DT.indexOf(wk0[0]):t0;}
-  html+="<h2>Karte – nächstbestes Tourengebiet</h2><div class='daysel'>"+sdays.map(function(i){
-    return "<button data-sday='"+i+"' class='"+(i===STATE.skiDay?"on":"")+"'>"+dayLabel(DT[i])+"</button>";}).join("")+"</div>";
+  if(STATE.skiDay===null||STATE.skiDay>=S.days.length){var wk=weekendKeys(S.days);STATE.skiDay=wk.length?S.days.indexOf(wk[0]):0;}
+  var html="<div class='lwd'><div><b>Schritt 1: Lawinenlage.</b> Das Dashboard bewertet nur Wetter und Schnee, nicht die Lawinengefahr. Lies vor jeder Tour den Lagebericht.</div><div class='links' style='margin-top:8px'>"+lwdLinks()+"</div></div>";
+  html+="<h2>Karte – bestes Tourengebiet</h2><div class='daysel'>"+S.days.map(function(k,i){
+    return "<button data-sday='"+i+"' class='"+(i===STATE.skiDay?"on":"")+"'>"+dayLabel(k)+"</button>";}).join("")+"</div>";
   html+="<div class='best'>"+bestSkiHTML(STATE.skiDay)+"</div><div id='map'></div>"+
-    "<div class='legend'>Hellblau = mind. 10 cm Neuschnee in den 72 h davor, Sonne und wenig Wind · Dunkelblau = brauchbar · Grau = eher nicht. Reine Wettereinschätzung, keine Aussage zur Lawinengefahr.</div>";
-  html+="<h2>Wo schneit's als Nächstes? (3 Tage)</h2><div class='rank'>";
-  rows.slice().sort(function(a,b){return b.next3-a.next3;}).forEach(function(x){
-    html+="<div><span>"+esc(x.reg.name)+" <span class='smeta'>"+esc(x.reg.area)+"</span></span><b>"+x.next3+" cm</b></div>";});
-  html+="</div><h2>Neuschnee pro Region</h2><div class='grid'>";
-  rows.forEach(function(x){
-    var D=x.D, idx=[];for(var i=x.ti;i<D.time.length&&idx.length<8;i++) idx.push(i);
-    var max=Math.max(10,Math.max.apply(null,idx.map(function(i){return D.snowfall_sum[i]||0;})));
-    var wk=weekendKeys(D.time.slice(x.ti)), wkTxt=wk.map(function(k){var i=D.time.indexOf(k);
-      return WD[parseDay(k).getDay()]+": "+Math.round(D.temperature_2m_min[i])+"/"+Math.round(D.temperature_2m_max[i])+"°, ☀ "+((D.sunshine_duration[i]||0)/3600).toFixed(0)+" h, Wind "+Math.round(D.wind_speed_10m_max[i]||0);}).join(" · ");
-    html+="<div class='card'><h3>"+esc(x.reg.name)+"</h3><div class='smeta'>"+esc(x.reg.area)+" · Referenz "+x.reg.alt+" m</div>";
-    html+="<div class='bars'>"+idx.map(function(i){var v=Math.round(D.snowfall_sum[i]||0);return "<div class='bar'>"+(v?"<b>"+v+"</b>":"")+"<i style='height:"+Math.round(v/max*70)+"px'></i></div>";}).join("")+"</div>";
-    html+="<div class='barlbl'>"+idx.map(function(i){return "<span class='"+(isWeekend(D.time[i])?"we":"")+"'>"+WD[parseDay(D.time[i]).getDay()]+"</span>";}).join("")+"</div>";
-    html+="<div class='kv'><span>Neuschnee letzte 72 h</span><b>"+x.past+" cm</b></div>";
-    html+="<div class='kv'><span>Nullgradgrenze heute max.</span><b>"+(x.fl[D.time[x.ti]]!==undefined?Math.round(x.fl[D.time[x.ti]]/50)*50+" m":"–")+"</b></div>";
-    if(wkTxt) html+="<div class='kv'><span>Wochenende</span><b style='text-align:right'>"+wkTxt+"</b></div>";
-    html+="</div>";
+    "<div class='legend'>Symbol = geschätzte Schneequalität (❄ Pulver · ☀ Firn-Chance · 🧊 Altschnee/Harsch · 🌬 windbeeinflusst · 💧 nass · 🪨 zu wenig Schnee). Farbe = Tourenwetter: hellblau top, dunkelblau brauchbar, grau eher nicht.</div>";
+  html+="<h2>7-Tage-Übersicht</h2><div class='tablewrap'><table><thead><tr><th></th>";
+  S.days.forEach(function(k){html+="<th class='"+(isWeekend(k)?"we":"")+"'>"+dayLabel(k)+"</th>";});
+  html+="</tr></thead><tbody>";
+  S.regions.forEach(function(r,ri){
+    html+="<tr><td class='site'><div class='sname'>"+esc(r.reg.name)+"</div><div class='smeta'>"+esc(r.reg.area)+" · "+r.reg.alt+" m · "+fmtDrive(r.reg.drive).replace("🚗 ","")+"</div></td>";
+    r.days.forEach(function(o,i){
+      if(!o){html+="<td class='cell'><div class='c bg-grey'>–</div></td>";return;}
+      var txtCol=o.cls==="good"?"#0d1215":"#e8eef2";
+      html+="<td class='cell'><div class='c"+(isWeekend(o.key)?" we":"")+"' data-r='"+ri+"' data-k='"+i+"' style='background:"+COLORS[o.cls]+";color:"+txtCol+";animation-delay:"+(ri*0.03+i*0.04).toFixed(2)+"s'>"+
+        "<div class='h' style='font-size:20px'>"+QUAL[o.q].i+"</div><div class='s'>❄ "+o.new72+" · "+(o.sun>=4?"☀":"☁")+" "+o.sun.toFixed(0)+"h</div></div></td>";
+    });
+    html+="</tr>";
   });
-  html+="</div><h2>Lawinenlage & Touren</h2><div class='links'>"+LINKS_SKI.map(function(l){return "<a href='"+l[1]+"' target='_blank' rel='noopener'>"+esc(l[0])+"</a>";}).join("")+"</div>";
+  html+="</tbody></table></div><div class='legend'>❄ = Neuschnee der letzten 72 h bis 7 Uhr (cm) · ☀/☁ = Sonnenstunden · Antippen für Details. Werte gelten für die Referenzhöhe der Region.</div>";
+  html+="<h2>Touren & Planung</h2><div class='links'><a href='https://www.skitourenguru.ch' target='_blank' rel='noopener'>Skitourenguru</a>"+lwdLinks()+"</div>";
   $("main").innerHTML=html;
   drawSkiMap(STATE.skiDay);
+}
+
+/* Detail einer Tourenregion */
+var SKIDET=null;
+function flakesSVG(n){
+  var l=n>=25?3:(n>=10?2:(n>=3?1:0)),b="";
+  for(var i=0;i<l;i++) b+="<text class='flake' x='"+(12+i*16)+"' y='14' font-size='13' fill='#9ad7ff' text-anchor='middle' style='animation-delay:"+(i*0.5)+"s'>❄</text>";
+  return "<svg width='56' height='22' viewBox='0 0 56 22'>"+(l?b:"<text x='28' y='15' fill='#45525c' font-size='10' text-anchor='middle'>–</text>")+"</svg>";
+}
+function openSkiDetail(ri,start){
+  var r=STATE.ski.regions[ri], reg=r.reg;
+  SKIDET={r:r,sel:start};
+  var h="<div class='dhead'><div><h2 style='margin:0 0 4px;color:var(--text);font-size:22px;text-transform:none;letter-spacing:0'>"+esc(reg.name)+"</h2>"+
+    "<div class='smeta'>"+esc(reg.area)+" · Referenzhöhe "+reg.alt+" m · "+fmtDrive(reg.drive)+"</div></div><button id='close'>×</button></div>";
+  h+="<div class='lwd' style='margin-top:10px'><b>Lawinenlage:</b> <a href='"+LWD[reg.lwd][1]+"' target='_blank' rel='noopener'>⚠ "+esc(LWD[reg.lwd][0])+" öffnen</a></div>";
+  h+="<div class='tiles' id='skitiles'>"+r.days.map(function(o,i){
+    if(!o) return "";
+    var cls={good:"soft-blue",ok:"soft-dblue",poor:"soft-grey"}[o.cls];
+    return "<div class='tile "+cls+(i===start?" sel":"")+"' data-skd='"+i+"' style='animation-delay:"+(i*0.04).toFixed(2)+"s;flex-basis:86px'>"+
+      "<div class='th'>"+dayLabel(o.key)+"</div><div style='font-size:28px;line-height:36px'>"+QUAL[o.q].i+"</div>"+
+      flakesSVG(o.new72)+"<div style='font-size:13px'>"+(o.sun>=4?"☀":"☁")+" "+o.sun.toFixed(0)+" h</div>"+sockSVG(o.gust||0)+
+      "<div style='font-size:12px;color:var(--muted)'>"+(o.tNight===null?"–":Math.round(o.tNight))+" / "+(o.tMax===null?"–":Math.round(o.tMax))+"°</div></div>";}).join("")+"</div>";
+  h+="<div class='legend'>Tageskachel: Schneequalität · Schneeflocken = Neuschnee 72 h · Sonne · Windsack = Böen auf Referenzhöhe · Temperatur Nacht/Tag. Antippen für Zahlen.</div>";
+  h+="<div class='chips' id='skiChips' style='margin-top:10px'></div>";
+  h+="<h2>Links</h2><div class='links'><a href='https://www.skitourenguru.ch' target='_blank' rel='noopener'>Skitourenguru</a>"+
+    "<a href='https://www.google.com/search?q="+encodeURIComponent("Webcam "+reg.name+" "+reg.area)+"' target='_blank' rel='noopener'>📷 Webcam suchen</a></div>";
+  $("dbox").innerHTML=h; $("detail").style.display="block"; document.body.style.overflow="hidden";
+  $("close").onclick=closeDetail;
+  selectSkiDay(start);
+}
+function selectSkiDay(i){
+  if(!SKIDET) return; var o=SKIDET.r.days[i]; if(!o) return; SKIDET.sel=i;
+  var t=document.querySelectorAll("#skitiles .tile");for(var k=0;k<t.length;k++){var on=+t[k].getAttribute("data-skd")===i;t[k].className=t[k].className.replace(" sel","")+(on?" sel":"");}
+  function chip(k,v){return "<div class='kchip'><div class='k'>"+k+"</div><div class='v'>"+v+"</div></div>";}
+  function r0(x,u){return x===null?"–":Math.round(x)+u;}
+  $("skiChips").innerHTML=
+    chip(dayLabel(o.key),"<span style='color:"+COLORS[o.cls]+"'>●</span> "+SKICLS[o.cls])+
+    chip("Schnee (Schätzung)",QUAL[o.q].i+" "+QUAL[o.q].t)+
+    chip("Neuschnee 24 h / 72 h",o.new24+" / "+o.new72+" cm")+
+    chip("Schneehöhe",o.depth===null?"–":o.depth+" cm")+
+    chip("Nullgradgrenze max.",o.fl===null?"–":Math.round(o.fl/50)*50+" m")+
+    chip("Temp. Nacht / Tag",r0(o.tNight,"°")+" / "+r0(o.tMax,"°"))+
+    chip("Gefühlt min.",r0(o.feel," °C"))+
+    chip("Böen / Gipfel 3000 m",r0(o.gust,"")+" / "+r0(o.up," km/h"))+
+    chip("Sonne",o.sun.toFixed(1)+" h")+
+    chip("Sonnenaufgang",o.sunrise||"–")+
+    "<div class='reasons' style='flex-basis:100%'>"+(o.hints.length?esc(o.hints.join(" · ")):"Keine besonderen Wetterhinweise.")+
+    "<br>Schneequalität und Einstufung sind grobe Schätzungen aus Wetterdaten – keine Aussage zur Lawinengefahr.</div>";
 }
 
 function render(){
@@ -773,7 +887,7 @@ function refresh(){
     STATE.demo=!res[0]||!res[1];
     var icon=res[0]||demoPara();
     STATE.para=analysePara(icon,res[2]||(STATE.demo?demoEc(icon):null));
-    STATE.ski=res[1]||demoSki();
+    STATE.ski=analyseSki(res[1]||demoSki());
     var n=new Date(); $("updated").textContent=(STATE.demo?"Demo-Modus · ":"Stand ")+pad(n.getHours())+":"+pad(n.getMinutes())+" Uhr";
     render();
   });
@@ -792,13 +906,17 @@ $("main").addEventListener("click",function(e){
   var t=e.target;
   if(t.getAttribute&&t.getAttribute("data-pday")!==null){STATE.mapDay=+t.getAttribute("data-pday");renderPara();return;}
   if(t.getAttribute&&t.getAttribute("data-sday")!==null){STATE.skiDay=+t.getAttribute("data-sday");renderSki();return;}
+  var c=t;while(c&&c!==this&&!(c.getAttribute&&c.getAttribute("data-r")!==null)) c=c.parentNode;
+  if(c&&c!==this){openSkiDetail(+c.getAttribute("data-r"),+c.getAttribute("data-k"));return;}
   var el=e.target; while(el&&el!==this&&!(el.getAttribute&&el.getAttribute("data-s")!==null)) el=el.parentNode;
   if(el&&el!==this) openDetail(+el.getAttribute("data-s"),+el.getAttribute("data-d"));
 });
 $("detail").addEventListener("click",function(e){
   if(e.target===this){closeDetail();return;}
   var el=e.target;while(el&&el!==this&&!(el.getAttribute&&el.getAttribute("data-hi")!==null)) el=el.parentNode;
-  if(el&&el!==this) selectHour(+el.getAttribute("data-hi"));
+  if(el&&el!==this){selectHour(+el.getAttribute("data-hi"));return;}
+  el=e.target;while(el&&el!==this&&!(el.getAttribute&&el.getAttribute("data-skd")!==null)) el=el.parentNode;
+  if(el&&el!==this) selectSkiDay(+el.getAttribute("data-skd"));
 });
 tick(); setInterval(tick,15000);
 render(); refresh(); setInterval(refresh,CONFIG.refreshMinutes*60000);
